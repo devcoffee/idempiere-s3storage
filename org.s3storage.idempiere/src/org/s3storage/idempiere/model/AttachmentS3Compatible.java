@@ -12,7 +12,7 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
  *****************************************************************************/
 
-package org.s3storage.model;
+package org.s3storage.idempiere.model;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -38,7 +38,7 @@ import org.compiere.model.MAttachmentEntry;
 import org.compiere.model.MStorageProvider;
 import org.compiere.util.CLogger;
 import org.compiere.util.Util;
-import org.s3storage.util.S3Util;
+import org.s3storage.idempiere.util.S3Util;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -106,6 +106,8 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 				}
 					
 			} catch (Exception e) {
+				log.log(Level.SEVERE, "loadLOBData", e);
+				attach.m_items = null;
 				return false;
 			}
 		}
@@ -174,12 +176,12 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 				if (!Util.isEmpty(path)) {
 					if (log.isLoggable(Level.FINE))
 						log.fine("move file to S3 compatible Storage: " + path);
+					
+
+					// Define the full path of file
+					StringBuilder msgfile = new StringBuilder().append(attachmentPathRoot)
+							.append(getAttachmentPathSnippet(attach)).append(entryFile.getName());
 					try {
-
-						// Define the full path of file
-						StringBuilder msgfile = new StringBuilder().append(attachmentPathRoot)
-								.append(getAttachmentPathSnippet(attach)).append(entryFile.getName());
-
 						// Upload File to S3 Storage
 						S3Client s3Client = S3Util.createS3Client(prov);
 						if (S3Util.putObject(s3Client, bucketStr, msgfile.toString(), entryFile)) {
@@ -195,11 +197,9 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 						}
 						
 					} catch (Exception e) {
-						e.printStackTrace();
 						log.severe("unable to copy file " + entryFile.getAbsolutePath() + " to " + attachmentPathRoot
 								+ File.separator + getAttachmentPathSnippet(attach) + File.separator
 								+ entryFile.getName());
-					} finally {
 					}
 				}
 			}
@@ -243,13 +243,20 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 				.append(getAttachmentPathSnippet(attach))
 				.append(entry.getName());
 		
-		S3Client s3Client = S3Util.createS3Client(prov);
-		S3Util.deleteObject(s3Client, bucketStr, path.toString());
-		attach.m_items.remove(index);
-		if (attach.get_ID() > 0) // the attachment has not been deleted
-			attach.saveEx(); // must save here as the operation cannot be rolled back on filesystem
-		if (log.isLoggable(Level.CONFIG)) log.config("Index=" + index + " - NewSize=" + attach.m_items.size());
-		return true;
+		try {
+			S3Client s3Client = S3Util.createS3Client(prov);
+			S3Util.deleteObject(s3Client, bucketStr, path.toString());
+			attach.m_items.remove(index);
+			if (attach.get_ID() > 0) // the attachment has not been deleted
+				attach.saveEx(); // must save here as the operation cannot be rolled back on filesystem
+			if (log.isLoggable(Level.CONFIG)) log.config("Index=" + index + " - NewSize=" + attach.m_items.size());
+			return true;
+			
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "deleteEntry", e);
+			return false;
+		}
+		
 	}
 
 	/**

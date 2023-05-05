@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <site>
-   <feature url="features/org.s3storage.idempiere.extensions.server.feature_9.0.0.qualifier" id="org.s3storage.idempiere.extensions.server.feature" version="9.0.0.qualifier">
+   <feature url="features/org.s3storage.idempiere.extensions.server.feature_1.0.0.qualifier" id="org.s3storage.idempiere.extensions.server.feature" version="1.0.0.qualifier">
       <category name="s3storage.idempiere.extensions"/>
    </feature>
    <category-def name="s3storage.idempiere.extensions" label="S3 Storage idempiere extensions"/>

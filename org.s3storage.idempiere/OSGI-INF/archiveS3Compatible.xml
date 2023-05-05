@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0" name="org.s3storage.model.ArchiveS3Compatible">
-   <implementation class="org.s3storage.model.ArchiveS3Compatible"/>
+<scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0" immediate="true" name="org.s3storage.idempiere.model.ArchiveS3Compatible">
+   <implementation class="org.s3storage.idempiere.model.ArchiveS3Compatible"/>
    <service>
       <provide interface="org.compiere.model.IArchiveStore"/>
    </service>
-   <property name="method" type="String" value="FileSystem"/>
+   <property name="method" type="String" value="S3Compatible"/>
 </scr:component>

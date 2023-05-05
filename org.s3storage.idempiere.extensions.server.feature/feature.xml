@@ -2,7 +2,7 @@
 <feature
       id="org.s3storage.idempiere.extensions.server.feature"
       label="org.s3storage.idempiere.extensions.server.feature"
-      version="9.0.0.qualifier"
+      version="1.0.0.qualifier"
       provider-name="devCoffee Business Solutions">
 
    <description url="http://www.example.com/description">

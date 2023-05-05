@@ -12,13 +12,16 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
  *****************************************************************************/
 
-package org.s3storage.util;
+package org.s3storage.idempiere.util;
 
 import java.io.File;
 import java.net.URI;
-import java.net.URISyntaxException;
+import java.util.logging.Level;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.compiere.model.MStorageProvider;
+import org.compiere.util.CLogger;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -32,28 +35,30 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 public class S3Util {
+
+	private static final CLogger log = CLogger.getCLogger(S3Util.class);
 	
-	public S3Client s3Client;
-	
+	private static final Pattern ENDPOINT_PATTERN = Pattern.compile("^(.+\\.)?s3[.-]([a-z0-9-]+)\\.");
+
 	public static S3Client createS3Client(MStorageProvider prov) {
 		String regionStr = prov.get_ValueAsString("S3Region");
 		String endpointStr = prov.get_ValueAsString("S3EndPoint");
 		boolean isAwsS3 = prov.getURL().contains("amazonaws.com");
-		
+
 		AwsBasicCredentials awsCreds = AwsBasicCredentials.create(prov.getUserName(), prov.getPassword());
 		StaticCredentialsProvider credentialsProvider = StaticCredentialsProvider.create(awsCreds);
 		UrlConnectionHttpClient urlConnection = (UrlConnectionHttpClient) UrlConnectionHttpClient.builder().build();
-		
-		if (isAwsS3) {		
+
+		if (isAwsS3) {
 			return S3Client.builder()
 					.region(Region.of(regionStr))
 					.credentialsProvider(credentialsProvider)
 					.httpClient(urlConnection).build();
 		} else {
-			return S3Client.builder()
-					.region(Region.of(regionStr))
+			return S3Client.builder().region(Region.of(regionStr))
 					.endpointOverride(getEndpoint(endpointStr))
 					.endpointProvider(null)
 					.credentialsProvider(credentialsProvider)
@@ -62,7 +67,7 @@ public class S3Util {
 		}
 
 	}
-	
+
 	/**
 	 * Check if the object Exist on Bucket
 	 * 
@@ -70,65 +75,80 @@ public class S3Util {
 	 */
 	public static boolean exists(S3Client s3Client, String bucket, String key) {
 		try {
-		       HeadObjectRequest headObjectRequest = HeadObjectRequest.builder().bucket(bucket).key(key).build();
-		       HeadObjectResponse headObjectResponse = s3Client.headObject(headObjectRequest);
-		       return headObjectResponse.sdkHttpResponse().isSuccessful();    
-		   }
-		   catch (NoSuchKeyException e) {
-		      //Log exception for debugging
-		      return false;
-		   }
+			HeadObjectRequest headObjectRequest = HeadObjectRequest.builder().bucket(bucket).key(key).build();
+			HeadObjectResponse headObjectResponse = s3Client.headObject(headObjectRequest);
+			return headObjectResponse.sdkHttpResponse().isSuccessful();
+		} catch (NoSuchKeyException e) {
+			log.log(Level.SEVERE, "exists", e);
+			return false;
+		}
 	}
-	
-	public static byte[] getObject(S3Client s3Client, String bucket, String key) {
-        try {
-        	GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucket).key(key).build();
-			return s3Client.getObjectAsBytes(getObjectRequest).asByteArray();
-        } catch (Exception e) {
-            e.printStackTrace();
-        } 
 
-        return null;
+	public static byte[] getObject(S3Client s3Client, String bucket, String key) {
+		try {
+			GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucket).key(key).build();
+			return s3Client.getObjectAsBytes(getObjectRequest).asByteArray();
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "getObject", e);
+		}
+		return null;
 	}
-	
-	
+
 	public static boolean putObject(S3Client s3Client, String bucket, String path, File file) {
-        try {
-			PutObjectRequest objectRequest = PutObjectRequest.builder().bucket(bucket)
-					.key(path).build();
+		try {
+			PutObjectRequest objectRequest = PutObjectRequest.builder().bucket(bucket).key(path).build();
 			s3Client.putObject(objectRequest, RequestBody.fromFile(file));
 			return true;
-        	 } catch (Exception e) {
-            e.printStackTrace();
-        }
-		return false; 
+		} catch (S3Exception e) {
+			log.log(Level.SEVERE, "putObject", e);
+		}
+		return false;
 	}
 	
-	public static boolean deleteObject(S3Client s3Client, String bucket, String path) {
-        try {
-			DeleteObjectRequest objectRequest = DeleteObjectRequest.builder().bucket(bucket)
-					.key(path).build();
-			s3Client.deleteObject(objectRequest);
+	public static boolean putObjectFomBytes(S3Client s3Client, String bucket, String path, byte[] bytes) {
+		try {
+			PutObjectRequest objectRequest = PutObjectRequest.builder().bucket(bucket).key(path).build();
+			s3Client.putObject(objectRequest, RequestBody.fromBytes(bytes));
 			return true;
-        	 } catch (Exception e) {
-            e.printStackTrace();
-        }
-		return false; 
+		} catch (S3Exception e) {
+			log.log(Level.SEVERE, "putObjectFromBytes", e);
+		}
+		return false;
 	}
 
+	public static boolean deleteObject(S3Client s3Client, String bucket, String path) {
+		try {
+			DeleteObjectRequest objectRequest = DeleteObjectRequest.builder().bucket(bucket).key(path).build();
+			s3Client.deleteObject(objectRequest);
+			return true;
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "deleteObject", e);
+		}
+		return false;
+	}
+	
+	/**
+	 * Returns the region from URL provided
+	 * 
+	 * @return String
+	 */
+	private static Region getRegion(String urlStr) {
+		
+	    URI uri = URI.create(urlStr);
+	    Matcher matcher = ENDPOINT_PATTERN.matcher(uri.getHost());
+	    if (matcher.find()) {
+	    	return Region.of(matcher.group(2));
+        }
+	    return null;
+    }
+	
 	/**
 	 * Returns the endpoint from URL provided
 	 * 
 	 * @return URI
 	 */
 	private static URI getEndpoint(String endpointStr) {
-		URI endpoint = null;
-		try {
-			endpoint = new URI(endpointStr);
-		} catch (URISyntaxException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-		return endpoint;
+	    URI uri = URI.create(endpointStr);
+		return uri;
 	}
 }

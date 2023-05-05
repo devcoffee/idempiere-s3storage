@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.s3storage.idempiere.extensions</groupId>
 		<artifactId>org.s3storage.idempiere.extensions.parent</artifactId>
-		<version>9.0.0-SNAPSHOT</version>
+		<version>1.0.0-SNAPSHOT</version>
 		<relativePath>../org.s3storage.idempiere.extensions.parent/pom.xml</relativePath>
 	</parent>
 	<artifactId>org.s3storage.idempiere.extensions.server.feature</artifactId>

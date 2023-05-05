@@ -12,15 +12,10 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
  *****************************************************************************/
 
-package org.s3storage.model;
+package org.s3storage.idempiere.model;
 
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.logging.Level;
 
@@ -38,7 +33,7 @@ import org.compiere.model.IArchiveStore;
 import org.compiere.model.MArchive;
 import org.compiere.model.MStorageProvider;
 import org.compiere.util.CLogger;
-import org.compiere.util.Util;
+import org.s3storage.idempiere.util.S3Util;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -46,8 +41,10 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
+import software.amazon.awssdk.services.s3.S3Client;
+
 public class ArchiveS3Compatible implements IArchiveStore {
-	
+		
 	private static final CLogger log = CLogger.getCLogger(ArchiveS3Compatible.class);
 	
 	private  String ARCHIVE_FOLDER_PLACEHOLDER = "%ARCHIVE_FOLDER%";
@@ -57,6 +54,7 @@ public class ArchiveS3Compatible implements IArchiveStore {
 
 	@Override
 	public byte[] loadLOBData(MArchive archive, MStorageProvider prov) {
+		String bucketStr = prov.get_ValueAsString("S3Bucket");
 		String archivePathRoot = getArchivePathRoot(prov);
 		if ("".equals(archivePathRoot)) {
 			throw new IllegalArgumentException("no attachmentPath defined");
@@ -87,36 +85,17 @@ public class ArchiveS3Compatible implements IArchiveStore {
 				if (log.isLoggable(Level.FINE)) log.fine("filePath: " + filePath);
 				if(filePath!=null){
 					filePath = filePath.replaceFirst(ARCHIVE_FOLDER_PLACEHOLDER, archivePathRoot.replaceAll("\\\\","\\\\\\\\"));
-					//just to be shure...
-					String replaceSeparator = File.separator;
-					if(!replaceSeparator.equals("/")){
-						replaceSeparator = "\\\\";
-					}
-					filePath = filePath.replaceAll("/", replaceSeparator);
-					filePath = filePath.replaceAll("\\\\", replaceSeparator);
-				}
-				if (log.isLoggable(Level.FINE)) log.fine("filePath: " + filePath);
-				final File file = new File(filePath);
-				if (file.exists()) {
-					// read files into byte[]
-					final byte[] dataEntry = new byte[(int) file.length()];
 					try {
-						final FileInputStream fileInputStream = new FileInputStream(file);
-						fileInputStream.read(dataEntry);
-						fileInputStream.close();
-					} catch (FileNotFoundException e) {
-						log.severe("File Not Found.");
-						e.printStackTrace();
-					} catch (IOException e1) {
-						log.severe("Error Reading The File.");
-						e1.printStackTrace();
+						S3Client s3Client = S3Util.createS3Client(prov);
+						if (S3Util.exists(s3Client, bucketStr, filePath)) {
+							byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
+							return dataEntry;
+						}
+					} catch (Exception e) {
+						log.log(Level.SEVERE, "loadLOBData", e);
+						return null;
 					}
-					return dataEntry;
-				} else {
-					log.severe("file not found: " + file.getAbsolutePath());
-					return null;
 				}
-
 		} catch (SAXException sxe) {
 			// Error generated during parsing)
 			Exception x = sxe;
@@ -139,11 +118,9 @@ public class ArchiveS3Compatible implements IArchiveStore {
 		return null;
 	}
 
-	/* (non-Javadoc)
-	 * @see org.compiere.model.IArchiveStore#save(org.compiere.model.MArchive, org.compiere.model.MStorageProvider)
-	 */
 	@Override
-	public void  save(MArchive archive, MStorageProvider prov,byte[] inflatedData) {		
+	public void  save(MArchive archive, MStorageProvider prov,byte[] inflatedData) {
+		
 		if (inflatedData == null || inflatedData.length == 0) {
 			throw new IllegalArgumentException("InflatedData is NULL");
 		}
@@ -156,9 +133,9 @@ public class ArchiveS3Compatible implements IArchiveStore {
 		}
 	}
 
-	private void write(MArchive archive, MStorageProvider prov,
-			byte[] inflatedData) {		
-		BufferedOutputStream out = null;
+	private void write(MArchive archive, MStorageProvider prov, byte[] inflatedData) {		
+		String bucketStr = prov.get_ValueAsString("S3Bucket");
+
 		try {
 			final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 			
@@ -166,23 +143,16 @@ public class ArchiveS3Compatible implements IArchiveStore {
 			if ("".equals(archivePathRoot)) {
 				throw new IllegalArgumentException("no attachmentPath defined");
 			}
-			// create destination folder
-			StringBuilder msgfile = new StringBuilder().append(archivePathRoot)
-					.append(archive.getArchivePathSnippet());
-			final File destFolder = new File(msgfile.toString());
-			if (!destFolder.exists()) {
-				if (!destFolder.mkdirs()) {
-					log.warning("unable to create folder: " + destFolder.getPath());
-				}
-			}
-			// write to pdf
-			msgfile = new StringBuilder().append(archivePathRoot).append(File.separator)
-					.append(archive.getArchivePathSnippet()).append(archive.get_ID()).append(".pdf");
-			final File destFile = new File(msgfile.toString());
 
-			out = new BufferedOutputStream(new FileOutputStream(destFile));
-			out.write(inflatedData);
-			out.flush();
+			StringBuilder msgfile = new StringBuilder().append(archivePathRoot).append(archive.getArchivePathSnippet()).append(archive.get_ID()).append(".pdf");
+			
+			try {
+				// Upload File to S3 Storage
+				S3Client s3Client = S3Util.createS3Client(prov);
+				S3Util.putObjectFomBytes(s3Client, bucketStr, msgfile.toString(), inflatedData);
+			} catch (Exception e) {
+				log.severe("unable to upload file " + msgfile.toString());
+			}
 
 			//create xml entry
 			final DocumentBuilder builder = factory.newDocumentBuilder();
@@ -206,14 +176,7 @@ public class ArchiveS3Compatible implements IArchiveStore {
 
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "saveLOBData", e);
-			archive.setByteData(null);
 			throw new RuntimeException(e);
-		} finally {
-			if(out != null){
-				try {
-					out.close();
-				} catch (Exception e) {	}
-			}
 		}
 	}
 
@@ -221,32 +184,33 @@ public class ArchiveS3Compatible implements IArchiveStore {
 		String archivePathRoot = prov.getFolder();
 		if (archivePathRoot == null)
 			archivePathRoot = "";
-		if (Util.isEmpty(archivePathRoot)) {
-			log.severe("no archivePath defined");
-		} else if (!archivePathRoot.endsWith(File.separator)){
-			archivePathRoot = archivePathRoot + File.separator;
-			log.fine(archivePathRoot);
-		}
+		if (archivePathRoot.startsWith("/"))
+			archivePathRoot = archivePathRoot.replaceFirst("/", "");
+		if (!archivePathRoot.endsWith("/"))
+			archivePathRoot = archivePathRoot + "/";
 		return archivePathRoot;
 	}
 
 	@Override
 	public boolean deleteArchive(MArchive archive, MStorageProvider prov) {
 		String archivePathRoot = getArchivePathRoot(prov);
+		String bucketStr = prov.get_ValueAsString("S3Bucket");
+
 		if ("".equals(archivePathRoot)) {
 			throw new IllegalArgumentException("no attachmentPath defined");
 		}
 		StringBuilder msgfile = new StringBuilder().append(archivePathRoot)
 				.append(archive.getArchivePathSnippet()).append(archive.getAD_Archive_ID()).append(".pdf");
 		
-		File file=new File(msgfile.toString());
-		if (file !=null && file.exists()) {
-			if (!file.delete()) {
-				log.warning("unable to delete " + file.getAbsolutePath());
-				return false;
-			}
+		try {
+			S3Client s3Client = S3Util.createS3Client(prov);
+			S3Util.deleteObject(s3Client, bucketStr, msgfile.toString());
+			return true;
+			
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "deleteArchive", e);
+			return false;
 		}
-		return true;
 	}
 
 	@Override

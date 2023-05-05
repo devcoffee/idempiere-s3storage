@@ -12,15 +12,10 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
  *****************************************************************************/
 
-package org.s3storage.model;
+package org.s3storage.idempiere.model;
 
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.logging.Level;
 
@@ -38,13 +33,15 @@ import org.compiere.model.IImageStore;
 import org.compiere.model.MImage;
 import org.compiere.model.MStorageProvider;
 import org.compiere.util.CLogger;
-import org.compiere.util.Util;
+import org.s3storage.idempiere.util.S3Util;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
+import software.amazon.awssdk.services.s3.S3Client;
 
 public class ImageS3Compatible implements IImageStore {
 	
@@ -57,6 +54,7 @@ public class ImageS3Compatible implements IImageStore {
 
 	@Override
 	public byte[] load(MImage image, MStorageProvider prov) {
+		String bucketStr = prov.get_ValueAsString("S3Bucket");
 		String imagePathRoot = getImagePathRoot(prov);
 		if ("".equals(imagePathRoot)) {
 			throw new IllegalArgumentException("no path defined");
@@ -87,36 +85,17 @@ public class ImageS3Compatible implements IImageStore {
 			if (log.isLoggable(Level.FINE)) log.fine("filePath: " + filePath);
 			if(filePath!=null){
 				filePath = filePath.replaceFirst(IMAGE_FOLDER_PLACEHOLDER, imagePathRoot.replaceAll("\\\\","\\\\\\\\"));
-				//just to be shure...
-				String replaceSeparator = File.separator;
-				if(!replaceSeparator.equals("/")){
-					replaceSeparator = "\\\\";
-				}
-				filePath = filePath.replaceAll("/", replaceSeparator);
-				filePath = filePath.replaceAll("\\\\", replaceSeparator);
-			}
-			if (log.isLoggable(Level.FINE)) log.fine("filePath: " + filePath);
-			final File file = new File(filePath);
-			if (file.exists()) {
-				// read files into byte[]
-				final byte[] dataEntry = new byte[(int) file.length()];
 				try {
-					final FileInputStream fileInputStream = new FileInputStream(file);
-					fileInputStream.read(dataEntry);
-					fileInputStream.close();
-				} catch (FileNotFoundException e) {
-					log.severe("File Not Found.");
-					e.printStackTrace();
-				} catch (IOException e1) {
-					log.severe("Error Reading The File.");
-					e1.printStackTrace();
+					S3Client s3Client = S3Util.createS3Client(prov);
+					if (S3Util.exists(s3Client, bucketStr, filePath)) {
+						byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
+						return dataEntry;
+					}
+				} catch (Exception e) {
+					log.log(Level.SEVERE, "loadLOBData", e);
+					return null;
 				}
-				return dataEntry;
-			} else {
-				log.severe("file not found: " + file.getAbsolutePath());
-				return null;
 			}
-
 		} catch (SAXException sxe) {
 			// Error generated during parsing)
 			Exception x = sxe;
@@ -158,7 +137,8 @@ public class ImageS3Compatible implements IImageStore {
 	}
 
 	private void write(MImage image, MStorageProvider prov, byte[] inflatedData) {
-		BufferedOutputStream out = null;
+		String bucketStr = prov.get_ValueAsString("S3Bucket");
+
 		try {
 			final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();			
 			
@@ -166,24 +146,17 @@ public class ImageS3Compatible implements IImageStore {
 			if ("".equals(imagePathRoot)) {
 				throw new IllegalArgumentException("no storage path defined");
 			}
-			// create destination folder
-			StringBuilder msgfile = new StringBuilder().append(imagePathRoot)
-					.append(image.getImageStoragePath());
-			final File destFolder = new File(msgfile.toString());
-			if (!destFolder.exists()) {
-				if (!destFolder.mkdirs()) {
-					log.warning("unable to create folder: " + destFolder.getPath());
-				}
-			}
-			
-			// write to path
-			msgfile = new StringBuilder().append(imagePathRoot).append(File.separator)
-					.append(image.getImageStoragePath()).append(image.get_ID());
-			final File destFile = new File(msgfile.toString());
 
-			out = new BufferedOutputStream(new FileOutputStream(destFile));
-			out.write(inflatedData);
-			out.flush();
+			StringBuilder msgfile = new StringBuilder().append(imagePathRoot)
+					.append(image.getImageStoragePath()).append(image.get_ID());
+			
+			try {
+				// Upload File to S3 Storage
+				S3Client s3Client = S3Util.createS3Client(prov);
+				S3Util.putObjectFomBytes(s3Client, bucketStr, msgfile.toString(), inflatedData);
+			} catch (Exception e) {
+				log.severe("unable to upload file " + msgfile.toString());
+			}
 
 			//create xml entry
 			final DocumentBuilder builder = factory.newDocumentBuilder();
@@ -209,12 +182,6 @@ public class ImageS3Compatible implements IImageStore {
 			log.log(Level.SEVERE, "saveLOBData", e);
 			image.setByteData(null);
 			throw new RuntimeException(e);
-		} finally {
-			if(out != null){
-				try {
-					out.close();
-				} catch (Exception e) {	}
-			}
 		}
 	}
 
@@ -222,32 +189,35 @@ public class ImageS3Compatible implements IImageStore {
 		String imagePathRoot = prov.getFolder();
 		if (imagePathRoot == null)
 			imagePathRoot = "";
-		if (Util.isEmpty(imagePathRoot)) {
-			log.severe("no image Path defined");
-		} else if (!imagePathRoot.endsWith(File.separator)){
-			imagePathRoot = imagePathRoot + File.separator;
-			log.fine(imagePathRoot);
-		}
+		if (imagePathRoot.startsWith("/"))
+			imagePathRoot = imagePathRoot.replaceFirst("/", "");
+		if (!imagePathRoot.endsWith("/"))
+			imagePathRoot = imagePathRoot + "/";
 		return imagePathRoot;
 	}
 
 	@Override
 	public boolean delete(MImage image, MStorageProvider prov) {
 		String imagePathRoot = getImagePathRoot(prov);
+		String bucketStr = prov.get_ValueAsString("S3Bucket");
+
 		if ("".equals(imagePathRoot)) {
-			throw new IllegalArgumentException("no image path defined");
+			throw new IllegalArgumentException("no attachmentPath defined");
 		}
 		StringBuilder msgfile = new StringBuilder().append(imagePathRoot)
 				.append(image.getImageStoragePath()).append(image.getAD_Image_ID());
 		
-		File file=new File(msgfile.toString());
-		if (file !=null && file.exists()) {
-			if (!file.delete()) {
-				log.warning("unable to delete " + file.getAbsolutePath());
-				return false;
-			}
+		try {
+			S3Client s3Client = S3Util.createS3Client(prov);
+			S3Util.deleteObject(s3Client, bucketStr, msgfile.toString());
+			return true;
+			
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "deleteImage", e);
+			return false;
 		}
-		return true;
+		
+		
 	}
 
 	@Override

@@ -6,7 +6,7 @@
 	<groupId>org.s3storage.idempiere.extensions</groupId>
 		
 	<artifactId>org.s3storage.idempiere.extensions.parent</artifactId>
-	<version>9.0.0-SNAPSHOT</version>
+	<version>1.0.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
 	<name>Maven parent project for s3storage iDempiere Extensions</name>
 

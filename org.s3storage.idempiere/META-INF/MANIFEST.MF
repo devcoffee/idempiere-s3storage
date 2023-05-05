@@ -1,16 +1,18 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: S3Storage
+Bundle-Name: S3Storage Idempiere Plugin
 Bundle-SymbolicName: org.s3storage.idempiere;singleton:=true
-Bundle-Version: 9.0.0.qualifier
+Bundle-Version: 1.0.0.qualifier
 Bundle-RequiredExecutionEnvironment: JavaSE-11
 Bundle-Activator: org.adempiere.plugin.utils.Incremental2PackActivator
-Service-Component: OSGI-INF/attachmentS3Compatible.xml
+Service-Component: OSGI-INF/attachmentS3Compatible.xml,
+ OSGI-INF/archiveS3Compatible.xml,
+ OSGI-INF/imageS3Compatible.xml
 Bundle-ActivationPolicy: lazy
-Export-Package: org.s3storage.model,
- org.s3storage.util
-Require-Bundle: org.adempiere.plugin.utils;bundle-version="9.0.0",
- org.adempiere.base;bundle-version="10.0.0"
+Export-Package: org.s3storage.idempiere.model,
+ org.s3storage.idempiere.util
+Require-Bundle: org.adempiere.plugin.utils;bundle-version="1.0.0",
+ org.adempiere.base
 Bundle-ClassPath: .,
  lib/aws-core.jar,
  lib/sdk-core.jar,
@@ -32,5 +34,4 @@ Bundle-ClassPath: .,
  lib/auth.jar,
  lib/url-connection-client.jar,
  lib/s3.jar
-Import-Package: org.compiere.apps
-Automatic-Module-Name: S3Storage
+Automatic-Module-Name: org.s3storage.idempiere
