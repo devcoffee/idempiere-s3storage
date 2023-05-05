@@ -54,7 +54,6 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 
 	@Override
 	public boolean loadLOBData(MAttachment attach, MStorageProvider prov) {
-
 		String attachmentPathRoot = getAttachmentPathRoot(prov);
 		String bucketStr = prov.get_ValueAsString("S3Bucket");
 
@@ -93,31 +92,22 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 			//Fix the placeholder of path
 			String filePath = fileNode.getNodeValue();
 			filePath = filePath.replaceFirst(attach.ATTACHMENT_FOLDER_PLACEHOLDER, attachmentPathRoot.replaceAll("\\\\","\\\\\\\\"));
-
-			try {
-				S3Client s3Client = S3Util.createS3Client(prov);
-				if (S3Util.exists(s3Client, bucketStr, filePath)) {
-					byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
-					MAttachmentEntry entry = new MAttachmentEntry(nameNode.getNodeValue(), dataEntry, attach.m_items.size() + 1);
-					attach.m_items.add(entry);
-				} else {
-					MAttachmentEntry entry = new MAttachmentEntry("~" + nameNode.getNodeValue()  + "~", "".getBytes(), attach.m_items.size() + 1);
-					attach.m_items.add(entry);
-				}
-					
-			} catch (Exception e) {
-				log.log(Level.SEVERE, "loadLOBData", e);
-				attach.m_items = null;
-				return false;
+			
+			S3Client s3Client = S3Util.createS3Client(prov);
+			if (S3Util.exists(s3Client, bucketStr, filePath)) {
+				byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
+				MAttachmentEntry entry = new MAttachmentEntry(nameNode.getNodeValue(), dataEntry, attach.m_items.size() + 1);
+				attach.m_items.add(entry);
+			} else {
+				MAttachmentEntry entry = new MAttachmentEntry("~" + nameNode.getNodeValue()  + "~", "".getBytes(), attach.m_items.size() + 1);
+				attach.m_items.add(entry);
 			}
 		}
-
 		return true;
 	}
 
 	@Override
 	public boolean save(MAttachment attach, MStorageProvider prov) {
-		
 		String attachmentPathRoot = getAttachmentPathRoot(prov);
 		String bucketStr = prov.get_ValueAsString("S3Bucket");
 
@@ -181,8 +171,6 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 					// Define the full path of file
 					StringBuilder msgfile = new StringBuilder().append(attachmentPathRoot)
 							.append(getAttachmentPathSnippet(attach)).append(entryFile.getName());
-					try {
-						// Upload File to S3 Storage
 						S3Client s3Client = S3Util.createS3Client(prov);
 						if (S3Util.putObject(s3Client, bucketStr, msgfile.toString(), entryFile)) {
 							final Element entry = document.createElement("entry");
@@ -195,12 +183,6 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 							entry.setAttribute("file", filePathToStore);
 							root.appendChild(entry);
 						}
-						
-					} catch (Exception e) {
-						log.severe("unable to copy file " + entryFile.getAbsolutePath() + " to " + attachmentPathRoot
-								+ File.separator + getAttachmentPathSnippet(attach) + File.separator
-								+ entryFile.getName());
-					}
 				}
 			}
 
@@ -216,7 +198,7 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 			attach.setTitle(MAttachment.XML);
 			return true;
 		} catch (Exception e) {
-			log.log(Level.SEVERE, "saveLOBData", e);
+			log.log(Level.SEVERE, "Error", e);
 		}
 		attach.setBinaryData(null);
 		return false;
@@ -239,13 +221,12 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 		
 		final MAttachmentEntry entry = attach.m_items.get(index);
 		
-		StringBuilder path = new StringBuilder(attachmentPathRoot)
+		StringBuilder msgfile = new StringBuilder(attachmentPathRoot)
 				.append(getAttachmentPathSnippet(attach))
 				.append(entry.getName());
-		
 		try {
 			S3Client s3Client = S3Util.createS3Client(prov);
-			S3Util.deleteObject(s3Client, bucketStr, path.toString());
+			S3Util.deleteObject(s3Client, bucketStr, msgfile.toString());
 			attach.m_items.remove(index);
 			if (attach.get_ID() > 0) // the attachment has not been deleted
 				attach.saveEx(); // must save here as the operation cannot be rolled back on filesystem
@@ -253,7 +234,7 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 			return true;
 			
 		} catch (Exception e) {
-			log.log(Level.SEVERE, "deleteEntry", e);
+			log.log(Level.SEVERE, "Error", e);
 			return false;
 		}
 		

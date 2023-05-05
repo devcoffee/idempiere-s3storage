@@ -35,7 +35,6 @@ import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.S3Exception;
 
 public class S3Util {
 
@@ -69,7 +68,7 @@ public class S3Util {
 	}
 
 	/**
-	 * Check if the object Exist on Bucket
+	 * Check if the object exist on Bucket
 	 * 
 	 * @return Boolean
 	 */
@@ -79,9 +78,9 @@ public class S3Util {
 			HeadObjectResponse headObjectResponse = s3Client.headObject(headObjectRequest);
 			return headObjectResponse.sdkHttpResponse().isSuccessful();
 		} catch (NoSuchKeyException e) {
-			log.log(Level.SEVERE, "exists", e);
-			return false;
+			log.log(Level.SEVERE, "Object not found", e);
 		}
+		return false;
 	}
 
 	public static byte[] getObject(S3Client s3Client, String bucket, String key) {
@@ -89,7 +88,7 @@ public class S3Util {
 			GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(bucket).key(key).build();
 			return s3Client.getObjectAsBytes(getObjectRequest).asByteArray();
 		} catch (Exception e) {
-			log.log(Level.SEVERE, "getObject", e);
+			log.log(Level.SEVERE, "Error", e);
 		}
 		return null;
 	}
@@ -99,8 +98,8 @@ public class S3Util {
 			PutObjectRequest objectRequest = PutObjectRequest.builder().bucket(bucket).key(path).build();
 			s3Client.putObject(objectRequest, RequestBody.fromFile(file));
 			return true;
-		} catch (S3Exception e) {
-			log.log(Level.SEVERE, "putObject", e);
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "Error", e);
 		}
 		return false;
 	}
@@ -110,8 +109,8 @@ public class S3Util {
 			PutObjectRequest objectRequest = PutObjectRequest.builder().bucket(bucket).key(path).build();
 			s3Client.putObject(objectRequest, RequestBody.fromBytes(bytes));
 			return true;
-		} catch (S3Exception e) {
-			log.log(Level.SEVERE, "putObjectFromBytes", e);
+		} catch (Exception e) {
+			log.log(Level.SEVERE, "Error", e);
 		}
 		return false;
 	}
@@ -122,7 +121,7 @@ public class S3Util {
 			s3Client.deleteObject(objectRequest);
 			return true;
 		} catch (Exception e) {
-			log.log(Level.SEVERE, "deleteObject", e);
+			log.log(Level.SEVERE, "error", e);
 		}
 		return false;
 	}

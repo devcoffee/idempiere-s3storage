@@ -56,6 +56,7 @@ public class ArchiveS3Compatible implements IArchiveStore {
 	public byte[] loadLOBData(MArchive archive, MStorageProvider prov) {
 		String bucketStr = prov.get_ValueAsString("S3Bucket");
 		String archivePathRoot = getArchivePathRoot(prov);
+		
 		if ("".equals(archivePathRoot)) {
 			throw new IllegalArgumentException("no attachmentPath defined");
 		}
@@ -85,15 +86,10 @@ public class ArchiveS3Compatible implements IArchiveStore {
 				if (log.isLoggable(Level.FINE)) log.fine("filePath: " + filePath);
 				if(filePath!=null){
 					filePath = filePath.replaceFirst(ARCHIVE_FOLDER_PLACEHOLDER, archivePathRoot.replaceAll("\\\\","\\\\\\\\"));
-					try {
-						S3Client s3Client = S3Util.createS3Client(prov);
-						if (S3Util.exists(s3Client, bucketStr, filePath)) {
-							byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
-							return dataEntry;
-						}
-					} catch (Exception e) {
-						log.log(Level.SEVERE, "loadLOBData", e);
-						return null;
+					S3Client s3Client = S3Util.createS3Client(prov);
+					if (S3Util.exists(s3Client, bucketStr, filePath)) {
+						byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
+						return dataEntry;
 					}
 				}
 		} catch (SAXException sxe) {
@@ -119,7 +115,7 @@ public class ArchiveS3Compatible implements IArchiveStore {
 	}
 
 	@Override
-	public void  save(MArchive archive, MStorageProvider prov,byte[] inflatedData) {
+	public void save(MArchive archive, MStorageProvider prov,byte[] inflatedData) {
 		
 		if (inflatedData == null || inflatedData.length == 0) {
 			throw new IllegalArgumentException("InflatedData is NULL");
@@ -135,24 +131,19 @@ public class ArchiveS3Compatible implements IArchiveStore {
 
 	private void write(MArchive archive, MStorageProvider prov, byte[] inflatedData) {		
 		String bucketStr = prov.get_ValueAsString("S3Bucket");
+		String archivePathRoot = getArchivePathRoot(prov);
 
 		try {
 			final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 			
-			String archivePathRoot = getArchivePathRoot(prov);
 			if ("".equals(archivePathRoot)) {
 				throw new IllegalArgumentException("no attachmentPath defined");
 			}
 
 			StringBuilder msgfile = new StringBuilder().append(archivePathRoot).append(archive.getArchivePathSnippet()).append(archive.get_ID()).append(".pdf");
-			
-			try {
-				// Upload File to S3 Storage
-				S3Client s3Client = S3Util.createS3Client(prov);
-				S3Util.putObjectFomBytes(s3Client, bucketStr, msgfile.toString(), inflatedData);
-			} catch (Exception e) {
-				log.severe("unable to upload file " + msgfile.toString());
-			}
+			S3Client s3Client = S3Util.createS3Client(prov);
+			if (!S3Util.putObjectFomBytes(s3Client, bucketStr, msgfile.toString(), inflatedData))
+				log.log(Level.SEVERE, "Error on save object | " + msgfile.toString());
 
 			//create xml entry
 			final DocumentBuilder builder = factory.newDocumentBuilder();
@@ -175,7 +166,7 @@ public class ArchiveS3Compatible implements IArchiveStore {
 			archive.setByteData(xmlData);
 
 		} catch (Exception e) {
-			log.log(Level.SEVERE, "saveLOBData", e);
+			log.log(Level.SEVERE, "Error", e);
 			throw new RuntimeException(e);
 		}
 	}
@@ -204,13 +195,12 @@ public class ArchiveS3Compatible implements IArchiveStore {
 		
 		try {
 			S3Client s3Client = S3Util.createS3Client(prov);
-			S3Util.deleteObject(s3Client, bucketStr, msgfile.toString());
-			return true;
-			
+			if (S3Util.deleteObject(s3Client, bucketStr, msgfile.toString()))
+				return true;
 		} catch (Exception e) {
-			log.log(Level.SEVERE, "deleteArchive", e);
-			return false;
+			log.log(Level.SEVERE, "Error", e);
 		}
+		return false;
 	}
 
 	@Override
