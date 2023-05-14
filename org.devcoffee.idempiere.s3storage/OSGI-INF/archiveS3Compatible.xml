@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.1.0" immediate="true" name="org.devcoffee.idempiere.s3storage.model.ArchiveS3Compatible">
+   <implementation class="org.devcoffee.idempiere.s3storage.model.ArchiveS3Compatible"/>
+   <service>
+      <provide interface="org.compiere.model.IArchiveStore"/>
+   </service>
+   <property name="method" type="String" value="S3Compatible"/>
+</scr:component>

@@ -1,6 +1,6 @@
 /******************************************************************************
  * Product: iDempiere ERP & CRM Smart Business Solution                       *
- * Copyright (C) 2012 Trek Global                                             *
+ * Copyright (C) 2012 devCoffee Soluções em Tecnologia                        *
  * This program is free software; you can redistribute it and/or modify it    *
  * under the terms version 2 of the GNU General Public License as published   *
  * by the Free Software Foundation. This program is distributed in the hope   *
@@ -12,7 +12,7 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
  *****************************************************************************/
 
-package org.s3storage.idempiere.util;
+package org.devcoffee.idempiere.s3storage.util;
 
 import java.io.File;
 import java.net.URI;

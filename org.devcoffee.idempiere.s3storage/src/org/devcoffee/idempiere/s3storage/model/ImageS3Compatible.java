@@ -1,6 +1,6 @@
 /******************************************************************************
  * Product: iDempiere ERP & CRM Smart Business Solution                       *
- * Copyright (C) 2012 Trek Global                                             *
+ * Copyright (C) 2012 devCoffee Soluções em Tecnologia                        *
  * This program is free software; you can redistribute it and/or modify it    *
  * under the terms version 2 of the GNU General Public License as published   *
  * by the Free Software Foundation. This program is distributed in the hope   *
@@ -12,7 +12,7 @@
  * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
  *****************************************************************************/
 
-package org.s3storage.idempiere.model;
+package org.devcoffee.idempiere.s3storage.model;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,7 +33,7 @@ import org.compiere.model.IImageStore;
 import org.compiere.model.MImage;
 import org.compiere.model.MStorageProvider;
 import org.compiere.util.CLogger;
-import org.s3storage.idempiere.util.S3Util;
+import org.devcoffee.idempiere.s3storage.util.S3Util;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
@@ -98,17 +98,14 @@ public class ImageS3Compatible implements IImageStore {
 			Exception x = sxe;
 			if (sxe.getException() != null)
 				x = sxe.getException();
-			x.printStackTrace();
 			log.severe(x.getMessage());
 
 		} catch (ParserConfigurationException pce) {
 			// Parser with specified options can't be built
-			pce.printStackTrace();
 			log.severe(pce.getMessage());
 
 		} catch (IOException ioe) {
 			// I/O error
-			ioe.printStackTrace();
 			log.severe(ioe.getMessage());
 		}
 		

@@ -2,12 +2,12 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
-		<groupId>org.s3storage.idempiere.extensions</groupId>
-		<artifactId>org.s3storage.idempiere.extensions.parent</artifactId>
+		<groupId>org.devcoffee.idempiere.extensions</groupId>
+		<artifactId>org.devcoffee.idempiere.extensions.parent</artifactId>
 		<version>1.0.0-SNAPSHOT</version>
-		<relativePath>../org.s3storage.idempiere.extensions.parent/pom.xml</relativePath>
+		<relativePath>../org.devcoffee.idempiere.extensions.parent/pom.xml</relativePath>
 	</parent>
-	<artifactId>org.s3storage.idempiere</artifactId>
+	<artifactId>org.devcoffee.idempiere.s3storage</artifactId>
 	<packaging>eclipse-plugin</packaging>
 	<build>
 		<plugins>

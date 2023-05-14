@@ -1,7 +1,7 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: S3Storage Idempiere Plugin
-Bundle-SymbolicName: org.s3storage.idempiere;singleton:=true
+Bundle-SymbolicName: org.devcoffee.idempiere.s3storage;singleton:=true
 Bundle-Version: 1.0.0.qualifier
 Bundle-RequiredExecutionEnvironment: JavaSE-11
 Bundle-Activator: org.adempiere.plugin.utils.Incremental2PackActivator
@@ -9,8 +9,8 @@ Service-Component: OSGI-INF/attachmentS3Compatible.xml,
  OSGI-INF/archiveS3Compatible.xml,
  OSGI-INF/imageS3Compatible.xml
 Bundle-ActivationPolicy: lazy
-Export-Package: org.s3storage.idempiere.model,
- org.s3storage.idempiere.util
+Export-Package: org.devcoffee.idempiere.s3storage.model,
+ org.devcoffee.idempiere.s3storage.util
 Require-Bundle: org.adempiere.plugin.utils;bundle-version="1.0.0",
  org.adempiere.base
 Bundle-ClassPath: .,
@@ -34,4 +34,5 @@ Bundle-ClassPath: .,
  lib/auth.jar,
  lib/url-connection-client.jar,
  lib/s3.jar
-Automatic-Module-Name: org.s3storage.idempiere
+Automatic-Module-Name: org.devcoffee.idempiere.s3storage
+Bundle-Vendor: devCoffee Soluções em Tecnologia

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <feature
-      id="org.s3storage.idempiere.extensions.server.feature"
-      label="org.s3storage.idempiere.extensions.server.feature"
+      id="org.devcoffee.idempiere.s3storage.server.feature"
+      label="org.devcoffee.idempiere.s3storage.server.feature"
       version="1.0.0.qualifier"
-      provider-name="devCoffee Business Solutions">
+      provider-name="devCoffee Soluções em Tecnlogia">
 
    <description url="http://www.example.com/description">
       [Enter Feature Description here.]
@@ -18,9 +18,10 @@
    </license>
 
    <plugin
-         id="org.s3storage.idempiere"
+         id="org.devcoffee.idempiere.s3storage"
          download-size="0"
          install-size="0"
          version="0.0.0"
          unpack="false"/>
+
 </feature>
