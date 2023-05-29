@@ -28,6 +28,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.adempiere.exceptions.AdempiereException;
 import org.compiere.model.IArchiveStore;
 import org.compiere.model.MArchive;
 import org.compiere.model.MStorageProvider;
@@ -141,9 +142,11 @@ public class ArchiveS3Compatible implements IArchiveStore {
 
 			StringBuilder msgfile = new StringBuilder().append(archivePathRoot).append(archive.getArchivePathSnippet()).append(archive.get_ID()).append(".pdf");
 			S3Client s3Client = S3Util.createS3Client(prov);
-			if (!S3Util.putObjectFomBytes(s3Client, bucketStr, msgfile.toString(), inflatedData))
+			if (!S3Util.putObjectFomBytes(s3Client, bucketStr, msgfile.toString(), inflatedData)) {
 				log.log(Level.SEVERE, "Error on save object | " + msgfile.toString());
-
+				throw new AdempiereException("Error saving S3 object: " + archive.getName());
+			}
+			
 			//create xml entry
 			final DocumentBuilder builder = factory.newDocumentBuilder();
 			final Document document = builder.newDocument();
@@ -196,6 +199,10 @@ public class ArchiveS3Compatible implements IArchiveStore {
 			S3Client s3Client = S3Util.createS3Client(prov);
 			if (S3Util.deleteObject(s3Client, bucketStr, msgfile.toString()))
 				return true;
+			else {
+				throw new AdempiereException("Error deleting S3 object: " + archive.getName());
+			}
+			
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "Error", e);
 		}
