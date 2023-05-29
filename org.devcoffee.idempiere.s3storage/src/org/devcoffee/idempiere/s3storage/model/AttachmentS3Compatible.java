@@ -182,6 +182,8 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 							log.fine(filePathToStore);
 							entry.setAttribute("file", filePathToStore);
 							root.appendChild(entry);
+						} else {
+							throw new AdempiereException("Error saving S3 object: " + entryFile.getName());
 						}
 				}
 			}
@@ -226,18 +228,20 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 				.append(entry.getName());
 		try {
 			S3Client s3Client = S3Util.createS3Client(prov);
-			S3Util.deleteObject(s3Client, bucketStr, msgfile.toString());
-			attach.m_items.remove(index);
-			if (attach.get_ID() > 0) // the attachment has not been deleted
-				attach.saveEx(); // must save here as the operation cannot be rolled back on filesystem
-			if (log.isLoggable(Level.CONFIG)) log.config("Index=" + index + " - NewSize=" + attach.m_items.size());
-			return true;
-			
+			if (S3Util.deleteObject(s3Client, bucketStr, msgfile.toString())) {
+				attach.m_items.remove(index);
+				if (attach.get_ID() > 0) // the attachment has not been deleted
+					attach.saveEx(); // must save here as the operation cannot be rolled back on filesystem
+				if (log.isLoggable(Level.CONFIG)) log.config("Index=" + index + " - NewSize=" + attach.m_items.size());
+				return true;
+			} else {
+				throw new AdempiereException("Error deleting S3 object: " + entry.getName());
+			}
+
 		} catch (Exception e) {
 			log.log(Level.SEVERE, "Error", e);
-			return false;
 		}
-		
+		return false;
 	}
 
 	/**
