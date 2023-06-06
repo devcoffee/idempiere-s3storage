@@ -108,6 +108,9 @@ public class ImageS3Compatible implements IImageStore {
 		} catch (IOException ioe) {
 			// I/O error
 			log.severe(ioe.getMessage());
+		} catch (Exception e) {
+			// General error
+			log.severe(e.getMessage());
 		}
 		
 		return null;

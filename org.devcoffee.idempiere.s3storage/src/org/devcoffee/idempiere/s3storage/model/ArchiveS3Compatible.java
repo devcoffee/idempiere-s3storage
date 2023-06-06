@@ -49,7 +49,6 @@ public class ArchiveS3Compatible implements IArchiveStore {
 	
 	private  String ARCHIVE_FOLDER_PLACEHOLDER = "%ARCHIVE_FOLDER%";
 
-	//temporary buffer when AD_Archive_ID=0;
 	private byte[] buffer;
 
 	@Override
@@ -102,13 +101,14 @@ public class ArchiveS3Compatible implements IArchiveStore {
 
 		} catch (ParserConfigurationException pce) {
 			// Parser with specified options can't be built
-			pce.printStackTrace();
 			log.severe(pce.getMessage());
 
 		} catch (IOException ioe) {
 			// I/O error
-			ioe.printStackTrace();
 			log.severe(ioe.getMessage());
+		} catch (Exception e) {
+			// General error
+			log.severe(e.getMessage());
 		}
 		
 		return null;

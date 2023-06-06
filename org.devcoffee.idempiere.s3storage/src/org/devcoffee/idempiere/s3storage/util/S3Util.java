@@ -126,20 +126,7 @@ public class S3Util {
 		return false;
 	}
 	
-	/**
-	 * Returns the region from URL provided
-	 * 
-	 * @return String
-	 */
-	private static Region getRegion(String urlStr) {
-		
-	    URI uri = URI.create(urlStr);
-	    Matcher matcher = ENDPOINT_PATTERN.matcher(uri.getHost());
-	    if (matcher.find()) {
-	    	return Region.of(matcher.group(2));
-        }
-	    return null;
-    }
+	
 	
 	/**
 	 * Returns the endpoint from URL provided
