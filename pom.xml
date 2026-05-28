@@ -13,6 +13,7 @@
 	</parent>
 	<modules>
 		<module>org.devcoffee.idempiere.s3storage</module>
+		<module>org.devcoffee.idempiere.extensions.parent</module>
 		<module>org.devcoffee.idempiere.extensions.p2</module>
 		<module>org.devcoffee.idempiere.s3storage.server.feature</module>
 	</modules>
