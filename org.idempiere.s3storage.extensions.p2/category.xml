@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <feature url="features/org.idempiere.s3storage.server.feature_1.0.0.qualifier.jar" id="org.idempiere.s3storage.server.feature" version="1.0.0.qualifier">
+      <category name="idempiere.extensions"/>
+   </feature>
+   <category-def name="idempiere.extensions" label="s3storage idempiere extensions"/>
+</site>
