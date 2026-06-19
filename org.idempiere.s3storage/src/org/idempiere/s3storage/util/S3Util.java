@@ -17,8 +17,6 @@ package org.idempiere.s3storage.util;
 import java.io.File;
 import java.net.URI;
 import java.util.logging.Level;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.compiere.model.MStorageProvider;
 import org.compiere.util.CLogger;
@@ -40,8 +38,6 @@ public class S3Util {
 
 	private static final CLogger log = CLogger.getCLogger(S3Util.class);
 	
-	private static final Pattern ENDPOINT_PATTERN = Pattern.compile("^(.+\\.)?s3[.-]([a-z0-9-]+)\\.");
-
 	public static S3Client createS3Client(MStorageProvider prov) {
 		String regionStr = prov.get_ValueAsString("S3Region");
 		String endpointStr = prov.get_ValueAsString("S3EndPoint");
@@ -59,7 +55,6 @@ public class S3Util {
 		} else {
 			return S3Client.builder().region(Region.of(regionStr))
 					.endpointOverride(getEndpoint(endpointStr))
-					.endpointProvider(null)
 					.credentialsProvider(credentialsProvider)
 					.forcePathStyle(true)
 					.httpClient(urlConnection).build();
