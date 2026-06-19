@@ -11,8 +11,7 @@ Service-Component: OSGI-INF/attachmentS3Compatible.xml,
 Bundle-ActivationPolicy: lazy
 Export-Package: org.idempiere.s3storage.model,
  org.idempiere.s3storage.util
-Require-Bundle: org.adempiere.base;bundle-version="2.0.0",
- org.eclipse.osgi;bundle-version="3.7.2",
+Require-Bundle: org.adempiere.base,
  org.adempiere.plugin.utils
 Bundle-ClassPath: .,
  lib/aws-core.jar,
@@ -34,6 +33,14 @@ Bundle-ClassPath: .,
  lib/slf4j-api.jar,
  lib/auth.jar,
  lib/url-connection-client.jar,
+ lib/identity-spi.jar,
+ lib/retries.jar,
+ lib/retries-spi.jar,
+ lib/http-auth-spi.jar,
+ lib/http-auth.jar,
+ lib/http-auth-aws.jar,
+ lib/checksums.jar,
+ lib/checksums-spi.jar,
  lib/s3.jar
 Automatic-Module-Name: org.idempiere.s3storage
 Bundle-Vendor: devCoffee Soluções em Tecnologia

@@ -18,6 +18,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.logging.Level;
 
@@ -35,8 +36,11 @@ import org.adempiere.exceptions.AdempiereException;
 import org.compiere.model.IAttachmentStore;
 import org.compiere.model.MAttachment;
 import org.compiere.model.MAttachmentEntry;
+import org.compiere.model.MAttachmentFile;
 import org.compiere.model.MStorageProvider;
+import org.compiere.model.MSysConfig;
 import org.compiere.util.CLogger;
+import org.compiere.util.Env;
 import org.compiere.util.Util;
 import org.idempiere.s3storage.util.S3Util;
 import org.w3c.dom.Document;
@@ -55,59 +59,85 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 	@Override
 	public boolean loadLOBData(MAttachment attach, MStorageProvider prov) {
 		String attachmentPathRoot = getAttachmentPathRoot(prov);
-		String bucketStr = prov.get_ValueAsString("S3Bucket");
+		
 
 		if (Util.isEmpty(attachmentPathRoot)) {
 			log.severe("no attachmentPath defined");
 			return false;
 		}
-
 		// Reset
 		attach.m_items = new ArrayList<MAttachmentEntry>();
-		//
-		byte[] data = attach.getBinaryData();
-		if (data == null)
-			return true;
-		if (log.isLoggable(Level.FINE))
-			log.fine("TextFileSize=" + data.length);
-		if (data.length == 0)
-			return true;
-
-		// Get the files record
-		NodeList entries = getEntriesFromXML(data);
-		if (entries == null)
-			return true;
-		
-		for (int i = 0; i < entries.getLength(); i++) {
-			final Node entryNode = entries.item(i);
-			final NamedNodeMap attributes = entryNode.getAttributes();
-			final Node fileNode = attributes.getNamedItem("file");
-			final Node nameNode = attributes.getNamedItem("name");
-			if (fileNode == null || nameNode == null) {
-				log.severe("no filename for entry " + i);
-				attach.m_items = null;
-				return false;
-			}
-
-			//Fix the placeholder of path
-			String filePath = fileNode.getNodeValue();
-			filePath = filePath.replaceFirst(attach.ATTACHMENT_FOLDER_PLACEHOLDER, attachmentPathRoot.replaceAll("\\\\","\\\\\\\\"));
-			
-			S3Client s3Client = S3Util.createS3Client(prov);
-			if (S3Util.exists(s3Client, bucketStr, filePath)) {
-				byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
-				MAttachmentEntry entry = new MAttachmentEntry(nameNode.getNodeValue(), dataEntry, attach.m_items.size() + 1);
-				attach.m_items.add(entry);
-			} else {
-				MAttachmentEntry entry = new MAttachmentEntry("~" + nameNode.getNodeValue()  + "~", "".getBytes(), attach.m_items.size() + 1);
-				attach.m_items.add(entry);
-			}
+		byte[] data = null;
+		if (! MAttachment.LIST_IN_ATTACHMENT_FILE.equals(attach.getTitle())) {
+			data = attach.getBinaryData();
+	        if (data == null || data.length == 0)
+	        	return true;
 		}
+		return loadEntries(attach, data, attachmentPathRoot,prov);
+	}
+	
+    private boolean loadEntries(MAttachment attach, byte[] data, String attachmentPathRoot, MStorageProvider prov) {
+    	String bucketStr = prov.get_ValueAsString("S3Bucket");
+    	if (MAttachment.LIST_IN_ATTACHMENT_FILE.equals(attach.getTitle())) {
+    		for (MAttachmentFile attachFile : attach.getAttachmentFiles()) {
+				String filePath = attachFile.getFilePath();
+				filePath = filePath.replaceFirst(attach.ATTACHMENT_FOLDER_PLACEHOLDER, attachmentPathRoot.replaceAll("\\\\","\\\\\\\\"));
+				
+				S3Client s3Client = S3Util.createS3Client(prov);
+				if (S3Util.exists(s3Client, bucketStr, filePath)) {
+					byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
+					MAttachmentEntry entry = new MAttachmentEntry(attachFile.getFileName(), dataEntry, attach.m_items.size() + 1);
+					entry.setSHA256Sum(attachFile.getSHA256Checksum());
+					attach.m_items.add(entry);
+				} else {
+					MAttachmentEntry entry = new MAttachmentEntry("~" + attachFile.getFileName()  + "~", "".getBytes(), attach.m_items.size() + 1);
+					attach.m_items.add(entry);
+				}
+    		}
+    	} else {
+			// Get the files record
+			NodeList entries = getEntriesFromXML(data);
+			if (entries == null)
+				return true;
+			
+			for (int i = 0; i < entries.getLength(); i++) {
+				final Node entryNode = entries.item(i);
+				final NamedNodeMap attributes = entryNode.getAttributes();
+				final Node fileNode = attributes.getNamedItem("file");
+				final Node nameNode = attributes.getNamedItem("name");
+				if (fileNode == null || nameNode == null) {
+					log.severe("no filename for entry " + i);
+					attach.m_items = null;
+					return false;
+				}
+	
+				//Fix the placeholder of path
+				String filePath = fileNode.getNodeValue();
+				filePath = filePath.replaceFirst(attach.ATTACHMENT_FOLDER_PLACEHOLDER, attachmentPathRoot.replaceAll("\\\\","\\\\\\\\"));
+				
+				S3Client s3Client = S3Util.createS3Client(prov);
+				if (S3Util.exists(s3Client, bucketStr, filePath)) {
+					byte[] dataEntry = S3Util.getObject(s3Client, bucketStr, filePath);
+					MAttachmentEntry entry = new MAttachmentEntry(nameNode.getNodeValue(), dataEntry, attach.m_items.size() + 1);
+					attach.m_items.add(entry);
+				} else {
+					MAttachmentEntry entry = new MAttachmentEntry("~" + nameNode.getNodeValue()  + "~", "".getBytes(), attach.m_items.size() + 1);
+					attach.m_items.add(entry);
+				}
+			}
+			return true;
+		}
+
 		return true;
 	}
 
 	@Override
 	public boolean save(MAttachment attach, MStorageProvider prov) {
+		return save(attach, prov, true);
+	}
+	
+	@Override
+	public boolean save(MAttachment attach, MStorageProvider prov,boolean beforeSave) {
 		String attachmentPathRoot = getAttachmentPathRoot(prov);
 		String bucketStr = prov.get_ValueAsString("S3Bucket");
 
@@ -120,95 +150,171 @@ public class AttachmentS3Compatible implements IAttachmentStore {
 			attach.setBinaryData(null);
 			return true;
 		}
+		
+		if (beforeSave) {
+			if (MSysConfig.getBooleanValue(MSysConfig.ATTACHMENT_SAVE_LIST_IN_AD_ATTACHMENTFILE, true, Env.getAD_Client_ID(Env.getCtx()))) {
+				attach.setBinaryData(null);
+				attach.setTitle(MAttachment.LIST_IN_ATTACHMENT_FILE);
+			} else {
 
-		NodeList xmlEntries = null;
-
-		final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-		try {
-			final DocumentBuilder builder = factory.newDocumentBuilder();
-			final Document document = builder.newDocument();
-			final Element root = document.createElement("attachments");
-			document.appendChild(root);
-			document.setXmlStandalone(true);
-			// create xml entries
-			for (int i = 0; i < attach.m_items.size(); i++) {
-				if (log.isLoggable(Level.FINE))
-					log.fine(attach.m_items.get(i).toString());
-				File entryFile = attach.m_items.get(i).getFile();
-				if (entryFile == null) {
-					String itemName = attach.m_items.get(i).getName();
-					if (itemName.startsWith("~") && itemName.endsWith("~")) {
-						itemName = itemName.substring(1, itemName.length() - 1);
-						if (xmlEntries != null) {
-							for (int x = 0; x < xmlEntries.getLength(); x++) {
-								final Node entryNode = xmlEntries.item(x);
-								final NamedNodeMap attributes = entryNode.getAttributes();
-								final Node fileNode = attributes.getNamedItem("file");
-								final Node nameNode = attributes.getNamedItem("name");
-								if (itemName.equals(nameNode.getNodeValue())) {
-									// file was not found but we preserve the old location just in case is temporary
-									final Element entry = document.createElement("entry");
-									entry.setAttribute("name", itemName);
-									entry.setAttribute("file", fileNode.getNodeValue());
-									root.appendChild(entry);
-									break;
+				NodeList xmlEntries = null;
+		
+				final DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+				try {
+					final DocumentBuilder builder = factory.newDocumentBuilder();
+					final Document document = builder.newDocument();
+					final Element root = document.createElement("attachments");
+					document.appendChild(root);
+					document.setXmlStandalone(true);
+					// create xml entries
+					for (int i = 0; i < attach.m_items.size(); i++) {
+						if (log.isLoggable(Level.FINE)) log.fine(attach.m_items.get(i).toString());
+						File entryFile = attach.m_items.get(i).getFile();
+						if (entryFile == null) {
+							String itemName = attach.m_items.get(i).getName();
+							if (itemName.startsWith("~") && itemName.endsWith("~")) {
+								itemName = itemName.substring(1, itemName.length()-1);
+								if (xmlEntries != null) {
+									for (int x = 0; x < xmlEntries.getLength(); x++) {
+										final Node entryNode = xmlEntries.item(x);
+										final NamedNodeMap attributes = entryNode.getAttributes();
+										final Node fileNode = attributes.getNamedItem("file");
+										final Node nameNode = attributes.getNamedItem("name");
+										if (itemName.equals(nameNode.getNodeValue())) {
+											// file was not found but we preserve the old location just in case is temporary
+											final Element entry = document.createElement("entry");
+											entry.setAttribute("name", itemName);
+											entry.setAttribute("file", fileNode.getNodeValue());
+											root.appendChild(entry);
+											break;
+										}
+									}
 								}
-							}
+								continue;
+							} else
+								throw new AdempiereException("Attachment file not found: " + itemName);
 						}
-						continue;
-					} else
-						throw new AdempiereException("Attachment file not found: " + itemName);
-				}
-				final String path = entryFile.getAbsolutePath();
-				// if local file - copy to central attachment folder
-				if (log.isLoggable(Level.FINE))
-					log.fine(path + " - " + attachmentPathRoot);
-				if (!Util.isEmpty(path)) {
-					if (log.isLoggable(Level.FINE))
-						log.fine("move file to S3 compatible Storage: " + path);
-					
-
-					// Define the full path of file
-					StringBuilder msgfile = new StringBuilder().append(attachmentPathRoot)
-							.append(getAttachmentPathSnippet(attach)).append(entryFile.getName());
-						S3Client s3Client = S3Util.createS3Client(prov);
-						if (S3Util.putObject(s3Client, bucketStr, msgfile.toString(), entryFile)) {
-							final Element entry = document.createElement("entry");
-							entry.setAttribute("name", attach.getEntryName(i));
-							String filePathToStore = msgfile.toString();
-							filePathToStore = filePathToStore.replaceFirst(
-									attachmentPathRoot.replaceAll("\\\\", "\\\\\\\\"),
-									attach.ATTACHMENT_FOLDER_PLACEHOLDER);
-							log.fine(filePathToStore);
-							entry.setAttribute("file", filePathToStore);
-							root.appendChild(entry);
-						} else {
-							throw new AdempiereException("Error saving S3 object: " + entryFile.getName());
+						final String path = entryFile.getAbsolutePath();
+						// if local file - copy to central attachment folder
+						if (log.isLoggable(Level.FINE))
+							log.fine(path + " - " + attachmentPathRoot);
+						if (!Util.isEmpty(path)) {
+							if (log.isLoggable(Level.FINE))
+								log.fine("move file to S3 compatible Storage: " + path);
+							
+		
+							// Define the full path of file
+							StringBuilder msgfile = new StringBuilder().append(attachmentPathRoot)
+									.append(getAttachmentPathSnippet(attach)).append(entryFile.getName());
+								S3Client s3Client = S3Util.createS3Client(prov);
+								if (S3Util.putObject(s3Client, bucketStr, msgfile.toString(), entryFile)) {
+									final Element entry = document.createElement("entry");
+									entry.setAttribute("name", attach.getEntryName(i));
+									String filePathToStore = msgfile.toString();
+									filePathToStore = filePathToStore.replaceFirst(
+											attachmentPathRoot.replaceAll("\\\\", "\\\\\\\\"),
+											attach.ATTACHMENT_FOLDER_PLACEHOLDER);
+									log.fine(filePathToStore);
+									entry.setAttribute("file", filePathToStore);
+									root.appendChild(entry);
+								} else {
+									throw new AdempiereException("Error saving S3 object: " + entryFile.getName());
+								}
 						}
+					}
+		
+					final Source source = new DOMSource(document);
+					final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+					final Result result = new StreamResult(bos);
+					final Transformer xformer = TransformerFactory.newInstance().newTransformer();
+					xformer.transform(source, result);
+					final byte[] xmlData = bos.toByteArray();
+					if (log.isLoggable(Level.FINE)) log.fine(bos.toString());
+					attach.setBinaryData(xmlData);
+					attach.setTitle(MAttachment.XML);
+					return true;
+				} catch (Exception e) {
+					log.log(Level.SEVERE, "saveLOBData", e);
 				}
+				attach.setBinaryData(null);
+				return false;
 			}
+		} else {
+			if (MSysConfig.getBooleanValue(MSysConfig.ATTACHMENT_SAVE_LIST_IN_AD_ATTACHMENTFILE, true, Env.getAD_Client_ID(Env.getCtx()))) {
+				for (int i = 0; i < attach.m_items.size(); i++) {
+					MAttachmentEntry entry = attach.m_items.get(i);
+					String itemName = entry.getName();
+					if (itemName.startsWith("~") && itemName.endsWith("~"))
+						itemName = itemName.substring(1, itemName.length()-1);
+					File entryFile = entry.getFile();
+					if (entryFile == null) {
+						log.warning("Attachment file not found: " + itemName);
+						continue;
+					}
+					String filePathToStore  = copyToRemoteStorage(attach, attachmentPathRoot, entryFile,prov,bucketStr);
+	                if (log.isLoggable(Level.FINE))
+					    log.fine(filePathToStore);
+					if (log.isLoggable(Level.FINE)) log.fine(entry.toString());
+					MAttachmentFile af = MAttachmentFile.get(attach, itemName);
+					af.setFilePath(filePathToStore);
+					af.setFileSize(BigDecimal.valueOf(entry.getSize()));
+					af.setSeqNo(i+1);
+					af.setSHA256Checksum(entry.getSHA256Sum());
+					af.setMIMEType(entry.getContentType());
+					af.saveEx(attach.get_TrxName());
 
-			final Source source = new DOMSource(document);
-			final ByteArrayOutputStream bos = new ByteArrayOutputStream();
-			final Result result = new StreamResult(bos);
-			final Transformer xformer = TransformerFactory.newInstance().newTransformer();
-			xformer.transform(source, result);
-			final byte[] xmlData = bos.toByteArray();
-			if (log.isLoggable(Level.FINE))
-				log.fine(bos.toString());
-			attach.setBinaryData(xmlData);
-			attach.setTitle(MAttachment.XML);
-			return true;
-		} catch (Exception e) {
-			log.log(Level.SEVERE, "Error", e);
+				}
+				for (MAttachmentFile oldAF : attach.getAttachmentFiles()) {
+					boolean found = false;
+					for (MAttachmentEntry entry : attach.m_items) {
+						String entryName = entry.getName();
+						if (entryName != null && entryName.startsWith("~") && entryName.endsWith("~"))
+							entryName = entryName.substring(1, entryName.length() - 1);
+						if (oldAF.getFileName() != null && oldAF.getFileName().equals(entryName)) {							
+							found = true;
+							break;
+						}
+					}
+					if (!found) {
+						if (log.isLoggable(Level.FINE)) log.fine("delete old attachment file " + oldAF);
+						oldAF.deleteEx(true, attach.get_TrxName());
+					}
+				}
+				attach.setBinaryData(null);
+				attach.setTitle(MAttachment.LIST_IN_ATTACHMENT_FILE);
+			}
 		}
-		attach.setBinaryData(null);
-		return false;
-
+		return true;
+	}
+	
+	private String copyToRemoteStorage(MAttachment attach, String attachmentPathRoot, File entryFile, MStorageProvider prov, String bucketStr) {
+		final String path = entryFile.getAbsolutePath();
+		// if local file - copy to central attachment folder
+		if (log.isLoggable(Level.FINE))
+			log.fine(path + " - " + attachmentPathRoot);
+		if (!Util.isEmpty(path)) {
+			if (log.isLoggable(Level.FINE))
+				log.fine("move file to S3 compatible Storage: " + path);
+			StringBuilder msgfile = new StringBuilder().append(attachmentPathRoot)
+					.append(getAttachmentPathSnippet(attach)).append(entryFile.getName());
+				S3Client s3Client = S3Util.createS3Client(prov);
+				if (S3Util.putObject(s3Client, bucketStr, msgfile.toString(), entryFile)) {
+		
+					String filePathToStore = msgfile.toString();
+					filePathToStore = filePathToStore.replaceFirst(
+							attachmentPathRoot.replaceAll("\\\\", "\\\\\\\\"),
+							attach.ATTACHMENT_FOLDER_PLACEHOLDER);			
+					return filePathToStore;
+				} else {
+					throw new AdempiereException("Error saving S3 object: " + entryFile.getName());
+				}
+		}
+		return null;
 	}
 
 	@Override
 	public boolean delete(MAttachment attach, MStorageProvider provider) {
+		//delete all attachment files and folder
 		while (attach.m_items.size() > 0) {
 			deleteEntry(attach, provider, attach.m_items.size()-1);
 		}
